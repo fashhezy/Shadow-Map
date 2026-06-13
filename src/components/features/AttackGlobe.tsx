@@ -425,8 +425,8 @@ export function AttackGlobe() {
         if (dot > 0.15) {
           // Project to screen coordinates
           const projected = tempVec.clone().project(camera);
-          const x = (projected.x * 0.5 + 0.5) * container.clientWidth;
-          const y = (-projected.y * 0.5 + 0.5) * container.clientHeight;
+          const x = (projected.x * 0.5 + 0.5) * (container?.clientWidth || 0);
+          const y = (-projected.y * 0.5 + 0.5) * (container?.clientHeight || 0);
 
           const opacity = Math.min(0.85, (dot - 0.15) * 1.8);
           label.style.transform = `translate(-50%, calc(-50% - 14px)) translate(${x}px, ${y}px)`;
