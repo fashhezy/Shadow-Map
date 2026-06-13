@@ -12,6 +12,7 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import { saveScanResult } from "@/lib/db";
 
 interface AuthContextType {
   user: User | null;
@@ -39,6 +40,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return () => unsubscribe();
   }, []);
+
+  // Sync guest investigations from sessionStorage to Firebase upon login
+  useEffect(() => {
+    if (!user) return;
+    
+    const syncGuestData = async () => {
+      try {
+        const storedHistory = sessionStorage.getItem("scanHistory");
+        if (storedHistory) {
+          const history = JSON.parse(storedHistory);
+          if (Array.isArray(history) && history.length > 0) {
+            console.log("Syncing guest investigations to Firebase...");
+            for (const scan of history) {
+              const { id, ...scanData } = scan; // Remove local ID to let Firebase generate one
+              await saveScanResult(user.uid, scanData);
+            }
+            // Clear local storage to prevent duplicate syncs
+            sessionStorage.removeItem("scanHistory");
+            sessionStorage.removeItem("scanResults");
+            console.log("Guest investigations synced successfully.");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync guest investigations:", err);
+      }
+    };
+    
+    syncGuestData();
+  }, [user]);
 
   const clearError = () => setError(null);
 

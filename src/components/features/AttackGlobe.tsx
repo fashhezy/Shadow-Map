@@ -129,9 +129,11 @@ export function AttackGlobe() {
     const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
     camera.position.z = 4.5;
 
+    const isMobile = window.innerWidth < 768;
+
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
 
@@ -140,7 +142,8 @@ export function AttackGlobe() {
     const GLOBE_RADIUS = 1.6;
 
     // ── Earth with realistic + digital shader ───────────────────────
-    const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96);
+    const earthSegments = isMobile ? 48 : 96;
+    const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, earthSegments, earthSegments);
     const textureLoader = new THREE.TextureLoader();
     const earthTexture = textureLoader.load("/textures/earth-blue-marble.jpg");
     earthTexture.colorSpace = THREE.SRGBColorSpace;
@@ -214,7 +217,8 @@ export function AttackGlobe() {
     globeGroup.add(earthMesh);
 
     // ── Atmosphere ──────────────────────────────────────────────────
-    const atmosGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.12, 64, 64);
+    const atmosSegments = isMobile ? 32 : 64;
+    const atmosGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.12, atmosSegments, atmosSegments);
     const atmosMat = new THREE.ShaderMaterial({
       vertexShader: `
         varying vec3 vNormal;
@@ -258,7 +262,8 @@ export function AttackGlobe() {
       city.position = latLngToVec3(city.lat, city.lng, GLOBE_RADIUS);
 
       // 3D node
-      const nodeGeo = new THREE.SphereGeometry(0.018, 16, 16);
+      const citySegments = isMobile ? 8 : 16;
+      const nodeGeo = new THREE.SphereGeometry(0.018, citySegments, citySegments);
       const nodeMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.95 });
       const node = new THREE.Mesh(nodeGeo, nodeMat);
       node.position.copy(city.position);
@@ -266,7 +271,8 @@ export function AttackGlobe() {
       cityMeshes.push(node);
 
       // Pulse ring
-      const ringGeo = new THREE.RingGeometry(0.025, 0.04, 32);
+      const ringSegments = isMobile ? 16 : 32;
+      const ringGeo = new THREE.RingGeometry(0.025, 0.04, ringSegments);
       const ringMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.position.copy(city.position);
@@ -376,11 +382,27 @@ export function AttackGlobe() {
     setTimeout(() => spawnSimulatedArc(), 900);
     setTimeout(() => spawnSimulatedArc(), 1400);
 
+    // ── Intersection Observer ───────────────────────────────────────
+    let isVisible = true;
+    const observer = new IntersectionObserver((entries) => {
+      isVisible = entries[0].isIntersecting;
+    }, { threshold: 0.1 });
+    observer.observe(container);
+
     // ── Resize ──────────────────────────────────────────────────────
+    let resizeTimeout: NodeJS.Timeout;
+    let lastWidth = container.clientWidth;
     const onResize = () => {
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
+      const currentWidth = container.clientWidth;
+      if (isMobile && Math.abs(currentWidth - lastWidth) < 20) return; // Ignore vertical scroll resizes
+      lastWidth = currentWidth;
+      
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      }, 150);
     };
     window.addEventListener("resize", onResize);
 
@@ -391,6 +413,8 @@ export function AttackGlobe() {
 
     function animate() {
       frameId = requestAnimationFrame(animate);
+      if (!isVisible) return; // Skip rendering when out of viewport
+
       const elapsed = (Date.now() - startTime) * 0.001;
 
       earthMat.uniforms.u_time.value = elapsed;
@@ -478,6 +502,7 @@ export function AttackGlobe() {
       container.removeEventListener("touchstart", onTS);
       container.removeEventListener("touchmove", onTM);
       window.removeEventListener("touchend", onTE);
+      observer.disconnect();
       // Clean up labels
       cityLabels.forEach((l) => l.remove());
       renderer.dispose();

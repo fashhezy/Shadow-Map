@@ -42,7 +42,7 @@ export const saveScanResult = async (userId: string, scanData: Partial<ScanResul
       userId,
       createdAt: Timestamp.now(),
     });
-    const docRef: any = await withTimeout(docRefPromise, 2000, null);
+    const docRef: any = await withTimeout(docRefPromise, 5000, null);
     if (!docRef) throw new Error("Firestore save timeout");
     return docRef.id;
   } catch (error) {
